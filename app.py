@@ -20,146 +20,151 @@ global xpol_report
 global range_of_slider
 global legend_html #formates the legend, 5 columns below figure
 global html_style   #colors legend always updated with legend_html by def legend_plotter
+global df_cellsites
+
+
+def distance_bearing(db_lat1, db_lat2, db_lon1, db_lon2, d_b_calc):
+    try:
+        db_lat1 = radians(db_lat1)
+        db_lat2 = radians(db_lat2)
+        db_lon1 = radians(db_lon1)
+        db_lon2 = radians(db_lon2)
+
+        db_distance = 0
+        db_bearing = -1
+
+        # distance
+        if d_b_calc == "d" or d_b_calc == "d_b":
+            db_a = (sin((db_lat2 - db_lat1) / 2) * sin((db_lat2 - db_lat1) / 2)) + (cos(db_lat1) * cos(db_lat2) *
+                                                                                    sin((
+                                                                                                db_lon2 - db_lon1) / 2) * sin(
+                        (db_lon2 - db_lon1) / 2))
+            db_c = 2 * atan2(sqrt(db_a), sqrt(1 - db_a))
+            db_distance = round(3956 * db_c)
+        # bearing
+        if d_b_calc == "b" or d_b_calc == "d_b":
+            db_y = sin(db_lon2 - db_lon1) * cos(db_lat2)
+            db_x = cos(db_lat1) * sin(db_lat2) - sin(db_lat1) * cos(db_lat2) * cos(db_lon2 - db_lon1)
+            db_bearing = atan2(db_y, db_x)
+            db_bearing = int(round((degrees(db_bearing) + 360) % 360))
+        return db_distance, db_bearing
+    except:
+        return None, None
+
+def bts_distance(acft_lat, bts_lat_dis, acft_lon, bts_lon_dis):
+    try:
+        acft_lat = radians(acft_lat)
+        acft_lon = radians(acft_lon)
+        bts_lat_dis = radians(bts_lat)
+        bts_lon_dis = radians(bts_lon)
+
+        bts_a = (sin((bts_lat_dis - acft_lat) / 2) * sin((bts_lat_dis - acft_lat) / 2)) + (cos(acft_lat) *
+                    cos(bts_lat_dis) * sin((bts_lon_dis - acft_lon) / 2) * sin((bts_lon_dis - acft_lon) / 2))
+        bts_c = 2 * atan2(sqrt(bts_a), sqrt(1 - bts_a))
+        bts_d = round(3956 * bts_c)
+        return bts_d
+    except:
+        return None
+
+
+def bts_bearing(acft_lat, bts_lat_bearing, acft_lon, bts_lon_bts_bearing):
+    try:
+        acft_lat = radians(acft_lat)
+        acft_lon = radians(acft_lon)
+        bts_lat_bearing = radians(bts_lat_bearing)
+        bts_lon_bts_bearing = radians(bts_lon_bts_bearing)
+
+        # bearing
+        bts_y = sin(bts_lon_bts_bearing - acft_lon) * cos(bts_lat_bearing)
+        bts_x = cos(acft_lat) * sin(bts_lat_bearing) - sin(acft_lat) * cos(bts_lat_bearing) * cos(bts_lon_bts_bearing - acft_lon)
+        bts_b = atan2(bts_y, bts_x)
+        bts_b = int(round((degrees(bts_b) + 360) % 360))
+        return bts_b
+    except:
+        return None
+
+
+def aft_bts_bearing(fwd_angle, heading):
+    try:
+        if fwd_angle is not None or heading is not None:
+            aft_bearing = (fwd_angle + (360 - heading)) % 360
+            return aft_bearing
+        else:
+            return None
+    except:
+        return None
+
+
+def location_bearing(lb_lat1, lb_lon1, lb_d, lb_bearing, R=6371):
+    try:
+        lb_d = lb_d * 1.609
+        lb_lat1 = radians(lb_lat1)
+        lb_lon1 = radians(lb_lon1)
+        lb_a = radians(lb_bearing)
+        lb_lat2 = asin(sin(lb_lat1) * cos(lb_d / R) + cos(lb_lat1) * sin(lb_d / R) * cos(lb_a))
+        lb_lon2 = lb_lon1 + atan2(
+            sin(lb_a) * sin(lb_d / R) * cos(lb_lat1),
+            cos(lb_d / R) - sin(lb_lat1) * sin(lb_lat2)
+        )
+        return degrees(lb_lat2), degrees(lb_lon2)
+    except:
+        return None, None
+
+def bts_re(bts_raw):
+    try:
+        pre = re.search(r'\d+', bts_raw)
+        bts = pre.group(0) if pre else None
+        post = re.search(r'-(\d+)$', bts_raw)
+        sector = post.group(0) if post else None
+        if (bts is not None and sector is not None) and 1 <= int(bts) < 500:
+            return bts
+        else:
+            return False
+    except:
+        return False
+
+def bts_info(bts):
+    try:
+        bts_raw = str(bts)
+        bts = bts_re(bts_raw)
+        if bts is not False:
+            return bts
+        else:
+            return None
+    except:
+        return None
+
+def bts_lat(bts_site):
+    global df_cellsites
+    try:
+        if len(df_cellsites.query(f'Site_ID == {bts_site}')) >= 1:  # cell site found in cell database
+            return df_cellsites.query(f'Site_ID == {bts_site}').iloc[0, 4]
+        else:
+            return None
+    except:
+        return None
+
+def bts_lon(bts_site):
+    global df_cellsites
+    try:
+        if len(df_cellsites.query(f'Site_ID == {bts_site}')) >= 1:  # cell site found in cell database
+            return df_cellsites.query(f'Site_ID == {bts_site}').iloc[0, 3]
+        else:
+            return None
+    except:
+        return None
 
 
 #parses the file uploaded and verifies it is usable. Either populates global df_static (dataframe) or sets it to False
 def parse_contents(contents, filename):
     global df_static
+    global df_cellsites
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
-
-    def distance_bearing(db_lat1, db_lat2, db_lon1, db_lon2, d_b_calc):
-        try:
-            db_lat1 = radians(db_lat1)
-            db_lat2 = radians(db_lat2)
-            db_lon1 = radians(db_lon1)
-            db_lon2 = radians(db_lon2)
-
-            db_distance = 0
-            db_bearing = -1
-
-            # distance
-            if d_b_calc == "d" or d_b_calc == "d_b":
-                db_a = (sin((db_lat2 - db_lat1) / 2) * sin((db_lat2 - db_lat1) / 2)) + (cos(db_lat1) * cos(db_lat2) *
-                                                                                        sin((
-                                                                                                        db_lon2 - db_lon1) / 2) * sin(
-                            (db_lon2 - db_lon1) / 2))
-                db_c = 2 * atan2(sqrt(db_a), sqrt(1 - db_a))
-                db_distance = round(3956 * db_c)
-            # bearing
-            if d_b_calc == "b" or d_b_calc == "d_b":
-                db_y = sin(db_lon2 - db_lon1) * cos(db_lat2)
-                db_x = cos(db_lat1) * sin(db_lat2) - sin(db_lat1) * cos(db_lat2) * cos(db_lon2 - db_lon1)
-                db_bearing = atan2(db_y, db_x)
-                db_bearing = int(round((degrees(db_bearing) + 360) % 360))
-            return db_distance, db_bearing
-        except:
-            return None, None
-
-    def bts_distance(acft_lat, bts_lat, acft_lon, bts_lon):
-        try:
-            acft_lat = radians(acft_lat)
-            acft_lon = radians(acft_lon)
-            bts_lat = radians(bts_lat)
-            bts_lon = radians(bts_lon)
-
-            bts_a = (sin((bts_lat - acft_lat) / 2) * sin((bts_lat - acft_lat) / 2)) + (cos(acft_lat) * cos(bts_lat) *
-                                                                                       sin((
-                                                                                                       bts_lon - acft_lon) / 2) * sin(
-                        (bts_lon - acft_lon) / 2))
-            bts_c = 2 * atan2(sqrt(bts_a), sqrt(1 - bts_a))
-            bts_d = round(3956 * bts_c)
-            return bts_d
-        except:
-            return None
-
-    def bts_bearing(acft_lat, bts_lat, acft_lon, bts_lon):
-        try:
-            acft_lat = radians(acft_lat)
-            acft_lon = radians(acft_lon)
-            bts_lat = radians(bts_lat)
-            bts_lon = radians(bts_lon)
-
-            # bearing
-            bts_y = sin(bts_lon - acft_lon) * cos(bts_lat)
-            bts_x = cos(acft_lat) * sin(bts_lat) - sin(acft_lat) * cos(bts_lat) * cos(bts_lon - acft_lon)
-            bts_b = atan2(bts_y, bts_x)
-            bts_b = int(round((degrees(bts_b) + 360) % 360))
-            return bts_b
-        except:
-            return None
-
-    def aft_bts_bearing(fwd_angle, heading):
-        try:
-            if fwd_angle is not None or heading is not None:
-                aft_bearing = (int(fwd_angle) + (360 - int(heading))) % 360
-                return aft_bearing
-            else:
-                return None
-        except:
-            return None
-
-    def location_bearing(lb_lat1, lb_lon1, lb_d, lb_bearing, R=6371):
-        try:
-            lb_d = lb_d * 1.609
-            lb_lat1 = radians(lb_lat1)
-            lb_lon1 = radians(lb_lon1)
-            lb_a = radians(lb_bearing)
-            lb_lat2 = asin(sin(lb_lat1) * cos(lb_d / R) + cos(lb_lat1) * sin(lb_d / R) * cos(lb_a))
-            lb_lon2 = lb_lon1 + atan2(
-                sin(lb_a) * sin(lb_d / R) * cos(lb_lat1),
-                cos(lb_d / R) - sin(lb_lat1) * sin(lb_lat2)
-            )
-            return degrees(lb_lat2), degrees(lb_lon2)
-        except:
-            return None, None
-
-    def bts_re(bts_raw):
-        try:
-            pre = re.search(r'\d+', bts_raw)
-            bts = pre.group(0) if pre else None
-            post = re.search(r'-(\d+)$', bts_raw)
-            sector = post.group(0) if post else None
-            if (bts is not None and sector is not None) and 1 <= int(bts) < 500:
-                return bts
-            else:
-                return False
-        except:
-            return False
-
-    def bts_info(bts):
-        try:
-            bts_raw = str(bts)
-            bts = bts_re(bts_raw)
-            if bts is not False:
-                return bts
-            else:
-                return None
-        except:
-            return None
-
-    def bts_lat(bts_site):
-        try:
-            if len(df_cellsites.query(f'Site_ID == {bts_site}')) >= 1:  # cell site found in cell database
-                return df_cellsites.query(f'Site_ID == {bts_site}').iloc[0, 4]
-            else:
-                return None
-        except:
-            return None
-
-    def bts_lon(bts_site):
-        try:
-            if len(df_cellsites.query(f'Site_ID == {bts_site}')) >= 1:  # cell site found in cell database
-                return df_cellsites.query(f'Site_ID == {bts_site}').iloc[0, 3]
-            else:
-                return None
-        except:
-            return None
-
     try:
         df_static = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
 
-        df_static.rename(columns={"lon 1": 'lon', "lat 1": "lat", "alt_m 1": "alt_m"},inplace=True, errors='ignore')
+        df_static.rename(columns={"lon 1": 'lon', "lat 1": "lat", "alt_m 1": "alt_m"}, inplace=True, errors='ignore')
         # format dataframe for our application
         df_static.drop(['RTT_Ping_Aircard2', 'acpu_time', 'act_set_pilot_eg', 'act_set_pilot_eg_aircard2',
                  'act_set_pilotpn_aircard2', 'agl_ft_1', 'agl_ft2', 'best_asp_sinr_buffer', 'time.1',
@@ -264,19 +269,17 @@ def parse_contents(contents, filename):
         df_static["fwd_ant_ac2_2_bts_angle"] = df_static.apply(lambda row: bts_bearing(row['lat'], row['bts2_latitude'], row['lon'],
                                                                          row['bts2_longitude']), axis=1)
 
-        # angle and distance to each bts for each aircard aft antenna
-        df_static["aft_ant_ac1_2_bts_distance"] = df_static["fwd_ant_ac1_2_bts_distance"]
-        df_static["aft_ant_ac1_2_bts_angle"] = df_static.apply(
-            lambda row: aft_bts_bearing(row["fwd_ant_ac1_2_bts_angle"], row['heading']),
-            axis=1)
-        df_static["aft_ant_ac2_2_bts_distance"] = df_static["fwd_ant_ac2_2_bts_distance"]
-        df_static["aft_ant_ac2_2_bts_angle"] = df_static.apply(
-            lambda row: aft_bts_bearing(row["fwd_ant_ac2_2_bts_angle"], row['heading']),
-            axis=1)
-
+        # # angle and distance to each bts for each aircard aft antenna
+        # df_static["aft_ant_ac1_2_bts_distance"] = df_static["fwd_ant_ac1_2_bts_distance"]
+        # # df_static["aft_ant_ac1_2_bts_angle"] = df_static.apply(lambda row: aft_bts_bearing(row["fwd_ant_ac1_2_bts_angle"], row['heading']), axis=1)
+        # df_static["aft_ant_ac2_2_bts_distance"] = df_static["fwd_ant_ac2_2_bts_distance"]
+        # # df_static["aft_ant_ac2_2_bts_angle"] = df_static.apply(lambda row: aft_bts_bearing(row["fwd_ant_ac2_2_bts_angle"], row['heading']), axis=1)
+        # df_static.to_csv('test.csv')
+        return True
     except:
+        print('nope')
         df_static = False
-
+        return False
 
 
 #creates a list of bts sites used throughout the flight
@@ -729,7 +732,6 @@ def color_airborne(df, plot_color):
 def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot, bts_plot):
     global df_static
     #time_start and time_end are df_static row indexes
-    print(df_static.loc[time_start, "time"], df_static.loc[time_end, "time"])
     try:
         df = df_static.copy(deep=True)
         df = df.iloc[time_start:time_end]
@@ -795,6 +797,7 @@ def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot,
                 for i in range(len(df)):
                     if ((df.loc[i, 'cell_search_id']) is not None and
                             df.loc[i, 'cell_search_id'] == df.loc[i, 'cell_search_id_aircard2']):
+                        print("bts match for:", i)
                         fig.add_scattergeo(
                             lon=[df.loc[i, 'lon'], df.loc[i, 'bts1_longitude']],
                             lat=[df.loc[i, 'lat'], df.loc[i, 'bts1_latitude']],
@@ -851,6 +854,7 @@ def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot,
             return fig
 
         else:  #antenna plot
+            print('in plot')
             fig = make_subplots(rows=2, cols=2, specs=[[{'type': 'polar'}] * 2] * 2, subplot_titles=('FWD Aircard 1',
                                                                                                      'FWD Aircard 2',
                                                                                                      'AFT Aircard 1',
@@ -1215,31 +1219,30 @@ def xpol_fill(minute_plot, time_start, time_end):
             df = df.reset_index()
 
         last_row_index = df.index[-1]
+
         # find flight minutes
         flight_minutes = int((df['time'].iloc[last_row_index] - df['time'].iloc[0]) /
                              pd.Timedelta(minutes=1))
         # find number of times drc is above 0 gives service minutes aircard was usable
         start_time = df.loc[0, 'time']
         end_time = df.loc[last_row_index, 'time']
+        start_time_index = df_static.index[(df_static['time']-start_time).abs().argsort()[:1]].tolist()
+        end_time_index = df_static.index[(df_static['time']-end_time).abs().argsort()[:1]].tolist()
 
-        df_static_row_start = df.index[df_static['time'] == start_time].tolist()
-        df_static_row_end = df.index[df_static['time'] == end_time].tolist()
-
-
-        for i in range(df_static_row_start[0], df_static_row_end[0]):
+        for i in range(start_time_index[0], end_time_index[0]):
             if df_static.loc[i, "drc_kbps"] > 0:
                 hpol_srv_min = hpol_srv_min + 1
             if df_static.loc[i, "drc_kbps_aircard2"] > 0:
                 vpol_srv_min = vpol_srv_min + 1
 
-        hpol_total_drc = df_static['drc_kbps'].iloc[df_static_row_start[0]:df_static_row_end[0]].sum()
+        hpol_total_drc = df_static['drc_kbps'].iloc[start_time_index[0]:end_time_index[0]].sum()
         hpol_avg_drc = hpol_total_drc / hpol_srv_min if hpol_srv_min else 0
         hpol_avg_drc = f"{hpol_avg_drc:.0f}"
-        vpol_total_drc = df_static['drc_kbps_aircard2'].iloc[df_static_row_start[0]:df_static_row_end[0]].sum()
+        vpol_total_drc = df_static['drc_kbps_aircard2'].iloc[start_time_index[0]:end_time_index[0]].sum()
         vpol_avg_drc = vpol_total_drc / vpol_srv_min if vpol_srv_min else 0
         vpol_avg_drc = f"{vpol_avg_drc:.0f}"
 
-        for i in range(df_static_row_start[0], df_static_row_end[0]):
+        for i in range(start_time_index[0], end_time_index[0]):
             #sum Hpol DRC
             if df_static.loc[i, 'drc_kbps'] is not None and df_static.loc[i, 'drc_kbps'] > 0:
                 hpol_total_count = hpol_total_count + 1
@@ -1296,13 +1299,14 @@ def xpol_fill(minute_plot, time_start, time_end):
         xpol_data.append(aft_hpol_xpol)
         xpol_data.append(aft_vpol_xpol)
         xpol_data.append(flight_minutes)
-        print('exiting xpol')
+
         del df
         return xpol_data
     except:
-        print('problem in xpol')
-        xpol_data_empty = ["", "", "", "", "", "", "", "", ""]
-        return xpol_data_empty
+        xpol_data = []
+        for i in range(9):
+          xpol_data.append("")
+          return xpol_data
 
 
 server = Flask(__name__)
@@ -1465,13 +1469,15 @@ def data_file_loaded(list_of_contents, list_of_names, plot, plot_color, rx_prima
     if list_of_contents is not None and ctx.triggered_id == 'upload_data' and df_static is False:
         contents = list_of_contents[0]
         filename = list_of_names[0]
-        if parse_contents(contents, filename) is not False:
+        build_dataframe = parse_contents(contents, filename)
+        if build_dataframe is True and len(df_static) > 0:
             #return of time_bar [time_start, time_end, marker, minimum, maximum, value]
             time_bar = time_slider_config(minute_plot)
             time_start = 0
             time_end = len(df_static) - 1
             xpol_report.clear()
             xpol_report = xpol_fill(minute_plot, time_start, time_end)
+
             plot_load = plotter(minute_plot, time_start, time_end, plot, plot_color, rx_primary, bts_plot)
             range_of_slider = time_bar[5]
             legend_html, html_style = legend_plotter(plot, plot_color)
@@ -1509,6 +1515,9 @@ def data_file_loaded(list_of_contents, list_of_names, plot, plot_color, rx_prima
             for i in range(5):
                 legend_html.append("")
                 html_style.append({})
+            xpol_report.clear()
+            for i in range(9):
+                xpol_report.append("")
             return ("File wrong type or format", False, "", True, fig_plot, marker, 0, 0, range_of_slider,
                     legend_html[0], html_style[0], legend_html[1], html_style[1],
                     legend_html[2], html_style[2], legend_html[3], html_style[3], legend_html[4], html_style[4], "",
@@ -1544,6 +1553,9 @@ def data_file_loaded(list_of_contents, list_of_names, plot, plot_color, rx_prima
             for i in range(5):
                 legend_html.append("")
                 html_style.append({})
+            xpol_report.clear()
+            for i in range(9):
+                xpol_report.append("")
             return ("File wrong type or format", False, "", True, plot_load, marker, 0, 0, range_of_slider,
                     legend_html[0], html_style[0], legend_html[1], html_style[1],
                     legend_html[2], html_style[2], legend_html[3], html_style[3], legend_html[4], html_style[4], "",
@@ -1759,6 +1771,5 @@ if __name__ == '__main__':
     html_style = []
     xpol_report = []
     app.run_server(debug=True)  #run local server
-
 
 
