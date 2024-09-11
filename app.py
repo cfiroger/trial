@@ -2,6 +2,7 @@ import dash
 from dash import html, dcc, Output, Input, ctx
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
+import dash_loading_spinners as dls
 import pandas as pd
 import io
 import numpy as np
@@ -12,14 +13,14 @@ import math
 from dash.exceptions import PreventUpdate
 from math import cos, sin, atan2, sqrt, degrees, radians, asin
 from plotly.subplots import make_subplots
-import gc
 
+import gc
 
 global df_static
 global xpol_report
 global range_of_slider
-global legend_html #formates the legend, 5 columns below figure
-global html_style   #colors legend always updated with legend_html by def legend_plotter
+global legend_html  #formates the legend, 5 columns below figure
+global html_style  #colors legend always updated with legend_html by def legend_plotter
 global df_cellsites
 
 
@@ -36,9 +37,7 @@ def distance_bearing(db_lat1, db_lat2, db_lon1, db_lon2, d_b_calc):
         # distance
         if d_b_calc == "d" or d_b_calc == "d_b":
             db_a = (sin((db_lat2 - db_lat1) / 2) * sin((db_lat2 - db_lat1) / 2)) + (cos(db_lat1) * cos(db_lat2) *
-                                                                                    sin((
-                                                                                                db_lon2 - db_lon1) / 2) * sin(
-                        (db_lon2 - db_lon1) / 2))
+                    sin((db_lon2 - db_lon1) / 2) * sin((db_lon2 - db_lon1) / 2))
             db_c = 2 * atan2(sqrt(db_a), sqrt(1 - db_a))
             db_distance = round(3956 * db_c)
         # bearing
@@ -51,15 +50,17 @@ def distance_bearing(db_lat1, db_lat2, db_lon1, db_lon2, d_b_calc):
     except:
         return None, None
 
+
 def bts_distance(acft_lat, bts_lat_dis, acft_lon, bts_lon_dis):
     try:
         acft_lat = radians(acft_lat)
         acft_lon = radians(acft_lon)
-        bts_lat_dis = radians(bts_lat)
-        bts_lon_dis = radians(bts_lon)
+        bts_lat_dis = radians(bts_lat_dis)
+        bts_lon_dis = radians(bts_lon_dis)
 
         bts_a = (sin((bts_lat_dis - acft_lat) / 2) * sin((bts_lat_dis - acft_lat) / 2)) + (cos(acft_lat) *
-                    cos(bts_lat_dis) * sin((bts_lon_dis - acft_lon) / 2) * sin((bts_lon_dis - acft_lon) / 2))
+                                                                                           cos(bts_lat_dis) * sin(
+                    (bts_lon_dis - acft_lon) / 2) * sin((bts_lon_dis - acft_lon) / 2))
         bts_c = 2 * atan2(sqrt(bts_a), sqrt(1 - bts_a))
         bts_d = round(3956 * bts_c)
         return bts_d
@@ -67,33 +68,18 @@ def bts_distance(acft_lat, bts_lat_dis, acft_lon, bts_lon_dis):
         return None
 
 
-def bts_bearing(acft_lat, bts_lat_bearing, acft_lon, bts_lon_bts_bearing):
-    try:
-        acft_lat = radians(acft_lat)
-        acft_lon = radians(acft_lon)
-        bts_lat_bearing = radians(bts_lat_bearing)
-        bts_lon_bts_bearing = radians(bts_lon_bts_bearing)
-
-        # bearing
-        bts_y = sin(bts_lon_bts_bearing - acft_lon) * cos(bts_lat_bearing)
-        bts_x = cos(acft_lat) * sin(bts_lat_bearing) - sin(acft_lat) * cos(bts_lat_bearing) * cos(bts_lon_bts_bearing - acft_lon)
-        bts_b = atan2(bts_y, bts_x)
-        bts_b = int(round((degrees(bts_b) + 360) % 360))
-        return bts_b
-    except:
-        return None
-
-
-def aft_bts_bearing(fwd_angle, heading):
-    try:
-        if fwd_angle is not None or heading is not None:
-            aft_bearing = (fwd_angle + (360 - heading)) % 360
-            return aft_bearing
+def angle_2_bts(heading, bearing, ant):
+    if heading is not None or bearing is not None:
+        if ant == "fwd":
+            dif = (heading - 360) if heading > 180 else heading
+            target = (bearing - dif) % 360
         else:
-            return None
-    except:
+            heading = (heading - 180) % 360
+            dif = (heading - 360) if heading > 180 else heading
+            target = (bearing - dif) % 360
+        return target
+    else:
         return None
-
 
 def location_bearing(lb_lat1, lb_lon1, lb_d, lb_bearing, R=6371):
     try:
@@ -110,6 +96,7 @@ def location_bearing(lb_lat1, lb_lon1, lb_d, lb_bearing, R=6371):
     except:
         return None, None
 
+
 def bts_re(bts_raw):
     try:
         pre = re.search(r'\d+', bts_raw)
@@ -123,6 +110,7 @@ def bts_re(bts_raw):
     except:
         return False
 
+
 def bts_info(bts):
     try:
         bts_raw = str(bts)
@@ -134,6 +122,7 @@ def bts_info(bts):
     except:
         return None
 
+
 def bts_lat(bts_site):
     global df_cellsites
     try:
@@ -144,6 +133,7 @@ def bts_lat(bts_site):
     except:
         return None
 
+
 def bts_lon(bts_site):
     global df_cellsites
     try:
@@ -153,6 +143,15 @@ def bts_lon(bts_site):
             return None
     except:
         return None
+
+
+#creates a list of bts sites used throughout the flight
+def bts_list(cell_list):  #creates single "list" AC1 & AC2 BTS connected to during flight
+    bts_sites = []
+    for site in cell_list:
+        if site not in bts_sites:
+            bts_sites.append(site)
+    return bts_sites
 
 
 #parses the file uploaded and verifies it is usable. Either populates global df_static (dataframe) or sets it to False
@@ -167,20 +166,24 @@ def parse_contents(contents, filename):
         df_static.rename(columns={"lon 1": 'lon', "lat 1": "lat", "alt_m 1": "alt_m"}, inplace=True, errors='ignore')
         # format dataframe for our application
         df_static.drop(['RTT_Ping_Aircard2', 'acpu_time', 'act_set_pilot_eg', 'act_set_pilot_eg_aircard2',
-                 'act_set_pilotpn_aircard2', 'agl_ft_1', 'agl_ft2', 'best_asp_sinr_buffer', 'time.1',
-                 'best_asp_sinr_buffer_aircard2', 'npr_set_pilotpn', 'rpc', 'rpc_aircard2', 'agl_ft 2',
-                 'cand_set_pilot_eg', 'cand_set_pilot_eg_aircard2', 'cand_set_pilotpn', 'cand_set_pilotpn_aircard2',
-                 'coverage', 'drc_buffer', 'drc_buffer_aircard2', 'flight_state', 'flight_state_change',
-                 'gps_admin_state', 'lon 2', 'lat 2', 'flight_number', 'gps_health', 'nbr_set_pilotpn',
-                 'gps_health', 'gps_time', 'h_acpu_time', 'horizontal_velocity', 'hstr', 'hstr_aircard2', 'minute',
-                 'nbr_set_pilot_eg', 'nbr_set_pilot_eg_aircard2', 'nbr_set_pilot_pn', 'nbr_set_pilot_pn_aircard2',
-                 'new_coverage', 'pa_state', 'pa_state_aircard2', 'per_inst', 'per_inst_aircard2', 'per_sequence',
-                 'per_sequence_aircard2', 'pilot_pn_asp', 'pilot_pn_asp_aircard2', 'pkt_rcvd_flag',
-                 'pkt_rcvd_flag_aircard2', 'product_type', 'rpc_cell_index', 'rpc_cell_index_aircard2',
-                 'serving_sector_id', 'vertical_velocity', 'write_time', 'new_time', 'type',
-                 'serving_sector_pn', 'serving_sector_pn_aircard2', 'sw', 'act_set_pilotpn', 'new_coverage',
-                 'agl_ft 1', 'act_set_pilotpn', 'alt_m 2', 'asp_filtered_sinr', 'asp_filtered_sinr_aircard2',
-                 ], axis=1, inplace=True, errors='ignore')
+                        'act_set_pilotpn_aircard2', 'agl_ft_1', 'agl_ft2', 'best_asp_sinr_buffer', 'time.1',
+                        'best_asp_sinr_buffer_aircard2', 'npr_set_pilotpn', 'rpc', 'rpc_aircard2', 'agl_ft 2',
+                        'cand_set_pilot_eg', 'cand_set_pilot_eg_aircard2', 'cand_set_pilotpn',
+                        'cand_set_pilotpn_aircard2',
+                        'coverage', 'drc_buffer', 'drc_buffer_aircard2', 'flight_state', 'flight_state_change',
+                        'gps_admin_state', 'lon 2', 'lat 2', 'flight_number', 'gps_health', 'nbr_set_pilotpn',
+                        'gps_health', 'gps_time', 'h_acpu_time', 'horizontal_velocity', 'hstr', 'hstr_aircard2',
+                        'minute',
+                        'nbr_set_pilot_eg', 'nbr_set_pilot_eg_aircard2', 'nbr_set_pilot_pn',
+                        'nbr_set_pilot_pn_aircard2',
+                        'new_coverage', 'pa_state', 'pa_state_aircard2', 'per_inst', 'per_inst_aircard2',
+                        'per_sequence',
+                        'per_sequence_aircard2', 'pilot_pn_asp', 'pilot_pn_asp_aircard2', 'pkt_rcvd_flag',
+                        'pkt_rcvd_flag_aircard2', 'product_type', 'rpc_cell_index', 'rpc_cell_index_aircard2',
+                        'serving_sector_id', 'vertical_velocity', 'write_time', 'new_time', 'type',
+                        'serving_sector_pn', 'serving_sector_pn_aircard2', 'sw', 'act_set_pilotpn', 'new_coverage',
+                        'agl_ft 1', 'act_set_pilotpn', 'alt_m 2', 'asp_filtered_sinr', 'asp_filtered_sinr_aircard2',
+                        ], axis=1, inplace=True, errors='ignore')
 
         df_static.drop_duplicates(subset=['time'], keep='last', inplace=True)  # drop any duplicate times
 
@@ -204,7 +207,8 @@ def parse_contents(contents, filename):
             else:
                 df_static.loc[i, 'valid_data'] = False
 
-        df_static.loc[coordinates_known, ['valid_data']] = True  # set all rows with good lat and long column valid_data to True
+        df_static.loc[
+            coordinates_known, ['valid_data']] = True  # set all rows with good lat and long column valid_data to True
         # based on rows with good latitude and longitude calculate heading
 
         for i in range(len(coordinates_known) - 1):
@@ -236,17 +240,19 @@ def parse_contents(contents, filename):
                 bearing = distance_bearing_missing[1]  # carried heading for missing data actually unknown so carried
                 segment = distance / (len(group) + 1)  # miles to each point, m = number of traces to fill
                 for i in range(len(group)):
-                    lat_long = location_bearing(df_static.loc[group[i] - 1, 'lat'], df_static.loc[group[i] - 1, 'lon'], segment,
+                    lat_long = location_bearing(df_static.loc[group[i] - 1, 'lat'], df_static.loc[group[i] - 1, 'lon'],
+                                                segment,
                                                 bearing)
                     df_static.loc[group[i], 'lat'] = lat_long[0]
                     df_static.loc[group[i], 'lon'] = lat_long[1]
                     df_static.loc[group[i], 'heading'] = bearing
 
         # altitude from meters to feet
-        df_static[['alt_m']] = df_static[['alt_m']].ffill() # next 2 lines altitude forward fill then back
+        df_static[['alt_m']] = df_static[['alt_m']].ffill()  # next 2 lines altitude forward fill then back
         df_static[['alt_m']] = df_static[['alt_m']].bfill()
         df_static['alt_m'] = df_static['alt_m'].astype(float)
-        df_static = df_static.assign(altitude=lambda x: (x['alt_m'] * 3.28084))  # calculate MSL altitude feet from meters
+        df_static = df_static.assign(
+            altitude=lambda x: (x['alt_m'] * 3.28084))  # calculate MSL altitude feet from meters
         df_static['altitude'] = df_static['altitude'].astype(int)
 
         # list and find coordinates for bts connected during flight for each aircard
@@ -259,36 +265,54 @@ def parse_contents(contents, filename):
         df_static["bts2_longitude"] = df_static['cell_search_id_aircard2'].apply(bts_lon)
         del df_cellsites  # no longer needed
 
-        # angle and distance to each bts for each aircard FWD antenna
-        df_static["fwd_ant_ac1_2_bts_distance"] = df_static.apply(lambda row: bts_distance(row['lat'], row['bts1_latitude'], row['lon'],
-                                                                             row['bts1_longitude']), axis=1)
-        df_static["fwd_ant_ac1_2_bts_angle"] = df_static.apply(lambda row: bts_bearing(row['lat'], row['bts1_latitude'], row['lon'],
-                                                                         row['bts1_longitude']), axis=1)
-        df_static["fwd_ant_ac2_2_bts_distance"] = df_static.apply(lambda row: bts_distance(row['lat'], row['bts2_latitude'], row['lon'],
-                                                                             row['bts2_longitude']), axis=1)
-        df_static["fwd_ant_ac2_2_bts_angle"] = df_static.apply(lambda row: bts_bearing(row['lat'], row['bts2_latitude'], row['lon'],
-                                                                         row['bts2_longitude']), axis=1)
+        # distance and bearing to each bts for each aircard
 
-        # # angle and distance to each bts for each aircard aft antenna
-        # df_static["aft_ant_ac1_2_bts_distance"] = df_static["fwd_ant_ac1_2_bts_distance"]
-        # # df_static["aft_ant_ac1_2_bts_angle"] = df_static.apply(lambda row: aft_bts_bearing(row["fwd_ant_ac1_2_bts_angle"], row['heading']), axis=1)
-        # df_static["aft_ant_ac2_2_bts_distance"] = df_static["fwd_ant_ac2_2_bts_distance"]
-        # # df_static["aft_ant_ac2_2_bts_angle"] = df_static.apply(lambda row: aft_bts_bearing(row["fwd_ant_ac2_2_bts_angle"], row['heading']), axis=1)
-        # df_static.to_csv('test.csv')
+        df_static["acft_distance_ac1_bts"] = df_static.apply(lambda row: distance_bearing(row['lat'],
+                                                                                          row['bts1_latitude'],
+                                                                                          row['lon'],
+                                                                                          row['bts1_longitude'],
+                                                                                          "d")[0], axis=1)
+
+        df_static["acft_bearing_ac1_bts"] = df_static.apply(lambda row: distance_bearing(row['lat'],
+                                                                                         row['bts1_latitude'],
+                                                                                         row['lon'],
+                                                                                         row['bts1_longitude'],
+                                                                                         "b")[1], axis=1)
+
+        df_static["acft_distance_ac2_bts"] = df_static.apply(lambda row: distance_bearing(row['lat'],
+                                                                                          row['bts2_latitude'],
+                                                                                          row['lon'],
+                                                                                          row['bts2_longitude'],
+                                                                                          "d")[0], axis=1)
+
+        df_static["acft_bearing_ac2_bts"] = df_static.apply(lambda row: distance_bearing(row['lat'],
+                                                                                         row['bts2_latitude'],
+                                                                                         row['lon'],
+                                                                                         row['bts2_longitude'],
+                                                                                         "b")[1], axis=1)
+
+        # compass bearing to bts for each aircard & antenna
+        df_static["fwd_ac1_angle_2_bts"] = df_static.apply(lambda row: angle_2_bts(row['heading'],
+                                                                                   row['acft_bearing_ac1_bts'],
+                                                                              "fwd"), axis=1)
+
+        df_static["fwd_ac2_angle_2_bts"] = df_static.apply(lambda row: angle_2_bts(row['heading'],
+                                                                                   row['acft_bearing_ac2_bts'],
+                                                                                   "fwd"), axis=1)
+
+        df_static["aft_ac1_angle_2_bts"] = df_static.apply(lambda row: angle_2_bts(row['heading'],
+                                                                                   row['acft_bearing_ac1_bts'],
+                                                                                   "aft"), axis=1)
+
+        df_static["aft_ac2_angle_2_bts"] = df_static.apply(lambda row: angle_2_bts(row['heading'],
+                                                                                   row['acft_bearing_ac2_bts'],
+                                                                                   "aft"), axis=1)
+
         return True
     except:
         print('nope')
         df_static = False
         return False
-
-
-#creates a list of bts sites used throughout the flight
-def bts_list(cell_list):  #creates single "list" AC1 & AC2 BTS connected to during flight
-    bts_sites = []
-    for site in cell_list:
-        if site not in bts_sites:
-            bts_sites.append(site)
-    return bts_sites
 
 
 #returns a formated template of the hover page for the flight map
@@ -331,41 +355,41 @@ def flight_hover(minute_plot):
 
 
 #formats the hover label for the antenna plots
-def antenna_hover(df): #providing single row df
+def antenna_hover(row):  #providing df_static row number
     global df_static
     template = []
     try:
-        time = df.loc['time'].strftime('%H:%M')
-        altitude = f"{df.loc['altitude']:,.0f}"
+        time = df_static.loc[row, 'time'].strftime('%H:%M')
+        altitude = f"{df_static.loc[row, 'altitude']:,.0f}"
         for i in range(4):
             match i:
                 case 0:
-                    if df.loc['drc_kbps'] is not None:
-                        drc = f"{df.loc['drc_kbps']:,.0f}"
+                    if df_static.loc[row, 'drc_kbps'] is not None:
+                        drc = f"{df_static.loc[row, 'drc_kbps']:,.0f}"
                     else:
                         drc = "NR"
-                    if df.loc['rx_agc0'] is not None:
-                        rx = f"{df.loc['rx_agc0']:,.1f}"
+                    if df_static.loc[row, 'rx_agc0'] is not None:
+                        rx = f"{df_static.loc[row, 'rx_agc0']:,.1f}"
                     else:
                         rx = "NR"
-                    if df.loc['fwd_ant_ac1_2_bts_distance'] is not None:
-                        dis = f"{df.loc['fwd_ant_ac1_2_bts_distance']:.0f}"
+                    if df_static.loc[row, 'acft_distance_ac1_bts'] is not None:
+                        dis = f"{df_static.loc[row, 'acft_distance_ac1_bts']:.0f}"
                     else:
                         dis = "NR"
-                    if df.loc['fwd_ant_ac1_2_bts_angle'] is not None:
-                        angle = f"{df.loc['fwd_ant_ac1_2_bts_angle']:.0f}"
+                    if df_static.loc[row, 'fwd_ac1_angle_2_bts'] is not None:
+                        angle = f"{df_static.loc[row, 'fwd_ac1_angle_2_bts']:.0f}"
                     else:
                         angle = "NR"
-                    if df.loc['best_asp_sinr_buffer_calc'] is not None:
-                        sinr = f"{df.loc['best_asp_sinr_buffer_calc']:,.1f}"
+                    if df_static.loc[row, 'best_asp_sinr_buffer_calc'] is not None:
+                        sinr = f"{df_static.loc[row, 'best_asp_sinr_buffer_calc']:,.1f}"
                     else:
                         sinr = "NR"
-                    if df.loc['cell_search_id'] is not None:
-                        bts = f"{df.loc['cell_search_id']}"
+                    if df_static.loc[row, 'cell_search_id'] is not None:
+                        bts = f"{df_static.loc[row, 'cell_search_id']}"
                     else:
                         bts = 'NR'
-                    if df.loc['tx_agc'] is not None:
-                        tx = f"{df.loc['tx_agc']:.1f}"
+                    if df_static.loc[row, 'tx_agc'] is not None:
+                        tx = f"{df_static.loc[row, 'tx_agc']:.1f}"
                     else:
                         tx = "NR"
                     line1 = f'<BR><b>Time</b>: {time}  <b>Altitude</b>: {altitude} ft agl</BR>'
@@ -379,32 +403,32 @@ def antenna_hover(df): #providing single row df
                     template.append(line1 + line2 + line3 + line4 + line5 + line6 + line7 + line8)
 
                 case 1:
-                    if df.loc['drc_kbps_aircard2'] is not None:
-                        drc = f"{df.loc['drc_kbps_aircard2']:,.0f}"
+                    if df_static.loc[row, 'drc_kbps_aircard2'] is not None:
+                        drc = f"{df_static.loc[row, 'drc_kbps_aircard2']:,.0f}"
                     else:
                         drc = 'NR'
-                    if df.loc['rx_agc0_aircard2'] is not None:
-                        rx = f"{df.loc['rx_agc0_aircard2']:,.1f}"
+                    if df_static.loc[row, 'rx_agc0_aircard2'] is not None:
+                        rx = f"{df_static.loc[row, 'rx_agc0_aircard2']:,.1f}"
                     else:
                         rx = "NR"
-                    if df.loc['fwd_ant_ac2_2_bts_distance'] is not None:
-                        dis = f"{df.loc['fwd_ant_ac2_2_bts_distance']:.0f}"
+                    if df_static.loc[row, 'acft_distance_ac2_bts'] is not None:
+                        dis = f"{df_static.loc[row, 'acft_distance_ac2_bts']:.0f}"
                     else:
                         dis = "NR"
-                    if df.loc['fwd_ant_ac2_2_bts_angle'] is not None:
-                        angle = f"{df.loc['fwd_ant_ac2_2_bts_angle']:.0f}"
+                    if df_static.loc[row, 'fwd_ac2_angle_2_bts'] is not None:
+                        angle = f"{df_static.loc[row, 'fwd_ac2_angle_2_bts']:.0f}"
                     else:
                         angle = 'NR'
-                    if df.loc['best_asp_sinr_buffer_aircard2_calc'] is not None:
-                        sinr = f"{df.loc['best_asp_sinr_buffer_aircard2_calc']:,.1f}"
+                    if df_static.loc[row, 'best_asp_sinr_buffer_aircard2_calc'] is not None:
+                        sinr = f"{df_static.loc[row, 'best_asp_sinr_buffer_aircard2_calc']:,.1f}"
                     else:
                         sinr = 'NR'
-                    if df.loc['cell_search_id_aircard2'] is not None:
-                        bts = f"{df.loc['cell_search_id_aircard2']}"
+                    if df_static.loc[row, 'cell_search_id_aircard2'] is not None:
+                        bts = f"{df_static.loc[row, 'cell_search_id_aircard2']}"
                     else:
                         bts = "NR"
-                    if df.loc['tx_agc_aircard2'] is not None:
-                        tx = f"{df.loc['tx_agc_aircard2']:.1f}"
+                    if df_static.loc[row, 'tx_agc_aircard2'] is not None:
+                        tx = f"{df_static.loc[row, 'tx_agc_aircard2']:.1f}"
                     else:
                         tx = 'NR'
                     line1 = f'<BR><b>Time</b>: {time}  <b>Altitude</b>: {altitude} ft agl</BR>'
@@ -418,32 +442,32 @@ def antenna_hover(df): #providing single row df
                     template.append(line1 + line2 + line3 + line4 + line5 + line6 + line7 + line8)
 
                 case 2:
-                    if df.loc['drc_kbps'] is not None:
-                        drc = f"{df.loc['drc_kbps']:,.0f}"
+                    if df_static.loc[row, 'drc_kbps'] is not None:
+                        drc = f"{df_static.loc[row, 'drc_kbps']:,.0f}"
                     else:
                         drc = "NR"
-                    if df.loc['rx_agc1'] is not None:
-                        rx = f"{df.loc['rx_agc1']:,.1f}"
+                    if df_static.loc[row, 'rx_agc1'] is not None:
+                        rx = f"{df_static.loc[row, 'rx_agc1']:,.1f}"
                     else:
                         rx = 'NR'
-                    if df.loc['aft_ant_ac1_2_bts_distance'] is not None:
-                        dis = f"{df.loc['aft_ant_ac1_2_bts_distance']:.0f}"
+                    if df_static.loc[row, 'acft_distance_ac1_bts'] is not None:
+                        dis = f"{df_static.loc[row, 'acft_distance_ac1_bts']:.0f}"
                     else:
                         dis = 'NR'
-                    if df.loc['aft_ant_ac1_2_bts_angle'] is not None:
-                        angle = f"{df.loc['aft_ant_ac1_2_bts_angle']:.0f}"
+                    if df_static.loc[row, 'aft_ac1_angle_2_bts'] is not None:
+                        angle = f"{df_static.loc[row, 'aft_ac1_angle_2_bts']:.0f}"
                     else:
                         angle = 'NR'
-                    if df.loc['best_asp_sinr_buffer_calc'] is not None:
-                        sinr = f"{df.loc['best_asp_sinr_buffer_calc']:,.1f}"
+                    if df_static.loc[row, 'best_asp_sinr_buffer_calc'] is not None:
+                        sinr = f"{df_static.loc[row, 'best_asp_sinr_buffer_calc']:,.1f}"
                     else:
                         sinr = "NR"
-                    if df.loc['cell_search_id'] is not None:
-                        bts = f"{df.loc['cell_search_id']}"
+                    if df_static.loc[row, 'cell_search_id'] is not None:
+                        bts = f"{df_static.loc[row, 'cell_search_id']}"
                     else:
                         bts = 'NR'
-                    if df.loc['tx_agc'] is not None:
-                        tx = f"{df.loc['tx_agc']:.1f}"
+                    if df_static.loc[row, 'tx_agc'] is not None:
+                        tx = f"{df_static.loc[row, 'tx_agc']:.1f}"
                     else:
                         tx = "NR"
                     line1 = f'<BR><b>Time</b>: {time}  <b>Altitude</b>: {altitude} ft agl</BR>'
@@ -457,32 +481,32 @@ def antenna_hover(df): #providing single row df
                     template.append(line1 + line2 + line3 + line4 + line5 + line6 + line7 + line8)
 
                 case 3:
-                    if df.loc['drc_kbps_aircard2'] is not None:
-                        drc = f"{df.loc['drc_kbps_aircard2']:,.0f}"
+                    if df_static.loc[row, 'drc_kbps_aircard2'] is not None:
+                        drc = f"{df_static.loc[row, 'drc_kbps_aircard2']:,.0f}"
                     else:
                         drc = "NR"
-                    if df.loc['rx_agc1_aircard2'] is not None:
-                        rx = f"{df.loc['rx_agc1_aircard2']:,.1f}"
+                    if df_static.loc[row, 'rx_agc1_aircard2'] is not None:
+                        rx = f"{df_static.loc[row, 'rx_agc1_aircard2']:,.1f}"
                     else:
                         rx = "NR"
-                    if df.loc['aft_ant_ac2_2_bts_distance'] is not None:
-                        dis = f"{df.loc['aft_ant_ac2_2_bts_distance']:.0f}"
+                    if df_static.loc[row, 'acft_distance_ac2_bts'] is not None:
+                        dis = f"{df_static.loc[row, 'acft_distance_ac2_bts']:.0f}"
                     else:
                         dis = "NR"
-                    if df.loc['aft_ant_ac2_2_bts_angle'] is not None:
-                        angle = f"{df.loc['aft_ant_ac2_2_bts_angle']:.0f}"
+                    if df_static.loc[row, 'aft_ac2_angle_2_bts'] is not None:
+                        angle = f"{df_static.loc[row, 'aft_ac2_angle_2_bts']:.0f}"
                     else:
                         angle = 'NR'
-                    if df.loc['best_asp_sinr_buffer_aircard2_calc'] is not None:
-                        sinr = f"{df.loc['best_asp_sinr_buffer_aircard2_calc']:,.1f}"
+                    if df_static.loc[row, 'best_asp_sinr_buffer_aircard2_calc'] is not None:
+                        sinr = f"{df_static.loc[row, 'best_asp_sinr_buffer_aircard2_calc']:,.1f}"
                     else:
                         sinr = "NR"
-                    if df.loc['cell_search_id_aircard2'] is not None:
-                        bts = f"{df.loc['cell_search_id_aircard2']}"
+                    if df_static.loc[row, 'cell_search_id_aircard2'] is not None:
+                        bts = f"{df_static.loc[row, 'cell_search_id_aircard2']}"
                     else:
                         bts = 'NR'
-                    if df.loc['tx_agc_aircard2'] is not None:
-                        tx = f"{df.loc['tx_agc_aircard2']:.1f}"
+                    if df_static.loc[row, 'tx_agc_aircard2'] is not None:
+                        tx = f"{df_static.loc[row, 'tx_agc_aircard2']:.1f}"
                     else:
                         tx = 'NR'
                     line1 = f'<BR><b>Time</b>: {time}  <b>Altitude</b>: {altitude} ft agl</BR>'
@@ -494,17 +518,13 @@ def antenna_hover(df): #providing single row df
                     line7 = f'<BR><b>Distance</b>: {dis} nm'
                     line8 = f'<BR><b>Bearing to BTS</b>: {angle}'
                     template.append(line1 + line2 + line3 + line4 + line5 + line6 + line7 + line8)
-
-        del df
         return template
     except:
-
-        del df
         return template
 
 
 #colors the flight map plots
-def color_plot(minute_plot, plot_color):
+def color_plot(minute_plot, trace):
     global df_static
     try:
         df = df_static.copy(deep=True)
@@ -512,8 +532,8 @@ def color_plot(minute_plot, plot_color):
             df = df.iloc[::5, :]
         color = []
         for i in df.index:
-            match plot_color:
-                case 'None':
+            match trace:
+                case 'Flight':
                     if df.loc[i, 'valid_data'] == True:
                         color.append('green')
                     else:
@@ -577,16 +597,17 @@ def color_plot(minute_plot, plot_color):
 
 
 #colors the antenna plots
-def color_airborne(df, plot_color):
+def color_airborne(row, trace):
+    global df_static
     color = ['', '', '', '']
     try:
-        match plot_color:
-            case 'None':
+        match trace:
+            case 'Flight':
                 for i in range(4):
                     color[i] = 'blue'
             case 'DRC':
-                ac1_kbps = pd.to_numeric(df.loc['drc_kbps'], errors='coerce')
-                ac2_kbps = pd.to_numeric(df.loc['drc_kbps_aircard2'], errors='coerce')
+                ac1_kbps = pd.to_numeric(df_static.loc[row, 'drc_kbps'], errors='coerce')
+                ac2_kbps = pd.to_numeric(df_static.loc[row, 'drc_kbps_aircard2'], errors='coerce')
                 if math.isnan(ac1_kbps) is True:
                     color[0] = 'black'
                     color[2] = 'black'
@@ -612,8 +633,8 @@ def color_airborne(df, plot_color):
                     color[1] = 'red'
                     color[3] = 'red'
             case 'SINR':
-                ac1_sinr = pd.to_numeric(df.loc['best_asp_sinr_buffer_calc'], errors='coerce')
-                ac2_sinr = pd.to_numeric(df.loc['best_asp_sinr_buffer_aircard2_calc'], errors='coerce')
+                ac1_sinr = pd.to_numeric(df_static.loc[row, 'best_asp_sinr_buffer_calc'], errors='coerce')
+                ac2_sinr = pd.to_numeric(df_static.loc[row, 'best_asp_sinr_buffer_aircard2_calc'], errors='coerce')
                 if math.isnan(ac1_sinr) is True:
                     color[0] = 'black'
                     color[2] = 'black'
@@ -645,10 +666,10 @@ def color_airborne(df, plot_color):
                     color[1] = 'red'
                     color[3] = 'red'
             case 'RX':
-                fwd_ac1_rx = pd.to_numeric(df.loc['rx_agc0'], errors='coerce')
-                fwd_ac2_rx = pd.to_numeric(df.loc['rx_agc0_aircard2'], errors='coerce')
-                aft_ac1_rx = pd.to_numeric(df.loc['rx_agc1'], errors='coerce')
-                aft_ac2_rx = pd.to_numeric(df.loc['rx_agc1_aircard2'], errors='coerce')
+                fwd_ac1_rx = pd.to_numeric(df_static.loc[row, 'rx_agc0'], errors='coerce')
+                fwd_ac2_rx = pd.to_numeric(df_static.loc[row, 'rx_agc0_aircard2'], errors='coerce')
+                aft_ac1_rx = pd.to_numeric(df_static.loc[row, 'rx_agc1'], errors='coerce')
+                aft_ac2_rx = pd.to_numeric(df_static.loc[row, 'rx_agc1_aircard2'], errors='coerce')
                 if math.isnan(fwd_ac1_rx) is True:
                     color[0] = 'black'
                 elif fwd_ac1_rx >= -70:
@@ -690,8 +711,8 @@ def color_airborne(df, plot_color):
                 else:
                     color[3] = 'red'
             case 'TX':
-                ac1_tx = pd.to_numeric(df.loc['tx_agc'], errors='coerce')
-                ac2_tx = pd.to_numeric(df.loc['tx_agc_aircard2'], errors='coerce')
+                ac1_tx = pd.to_numeric(df_static.loc[row, 'tx_agc'], errors='coerce')
+                ac2_tx = pd.to_numeric(df_static.loc[row, 'tx_agc_aircard2'], errors='coerce')
                 if math.isnan(ac1_tx) is True:
                     color[0] = 'black'
                     color[2] = 'black'
@@ -722,14 +743,13 @@ def color_airborne(df, plot_color):
                 else:
                     color[1] = 'red'
                     color[3] = 'red'
-        del df
         return color
     except:
         return color
 
 
 #plots the maps and or antenna plot when there is data
-def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot, bts_plot):
+def plotter(minute_plot, time_start, time_end, plot_choice, trace, rx_plot, bts_plot):
     global df_static
     #time_start and time_end are df_static row indexes
     try:
@@ -763,10 +783,10 @@ def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot,
                 df_btslist.loc[i, 'latitude'] = None
                 df_btslist.loc[i, 'longitude'] = None
 
-        if plot_choice == 'Flight':  #flight plt
+        if plot_choice == 'Map':  #flight plt
             # df.reset_index(drop=True, inplace=True)
             flight_hover_template = flight_hover(minute_plot)
-            trace_color = color_plot(minute_plot, plot_color)
+            trace_color = color_plot(minute_plot, trace)
 
             fig = go.Figure(data=go.Scattergeo(
                 lon=df['lon'],
@@ -797,7 +817,6 @@ def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot,
                 for i in range(len(df)):
                     if ((df.loc[i, 'cell_search_id']) is not None and
                             df.loc[i, 'cell_search_id'] == df.loc[i, 'cell_search_id_aircard2']):
-                        print("bts match for:", i)
                         fig.add_scattergeo(
                             lon=[df.loc[i, 'lon'], df.loc[i, 'bts1_longitude']],
                             lat=[df.loc[i, 'lat'], df.loc[i, 'bts1_latitude']],
@@ -849,12 +868,12 @@ def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot,
             )
 
             fig.update_geos(fitbounds="locations")
+            fig.update_yaxes(automargin=True)
             del df_cellsites
             del df
             return fig
 
         else:  #antenna plot
-            print('in plot')
             fig = make_subplots(rows=2, cols=2, specs=[[{'type': 'polar'}] * 2] * 2, subplot_titles=('FWD Aircard 1',
                                                                                                      'FWD Aircard 2',
                                                                                                      'AFT Aircard 1',
@@ -864,8 +883,10 @@ def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot,
             trace_hoverlabel = dict(bgcolor="white", font_size=10, font_family="Rockwell")
             trace_mode = 'lines+markers'
             for i in range(len(df)):
-                template = antenna_hover(df.loc[i].copy(deep=True))
-                line_color = color_airborne(df.loc[i].copy(deep=True), plot_color)
+                df_static_row = df_static.index[df_static['time'] == df.loc[i, "time"]].to_list()
+                template = antenna_hover(df_static_row[0])
+                line_color = color_airborne(df_static_row[0], trace)
+
                 fwd_ac1_rx = df.loc[i, 'rx_agc0']
                 fwd_ac2_rx = df.loc[i, 'rx_agc0_aircard2']
                 aft_ac1_rx = df.loc[i, 'rx_agc1']
@@ -875,11 +896,11 @@ def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot,
                         if x == 0 and y == 0:
                             if rx_plot is True and fwd_ac1_rx < aft_ac1_rx:
                                 break
-                            elif (df.loc[i, 'fwd_ant_ac1_2_bts_distance'] is not None and
-                                  df.loc[i, "fwd_ant_ac1_2_bts_angle"] is not None):
+                            elif (df.loc[i, 'acft_distance_ac1_bts'] is not None and
+                                  df.loc[i, "fwd_ac1_angle_2_bts"] is not None):
                                 fig.add_trace((go.Scatterpolar(
-                                    r=[0, df.loc[i, 'fwd_ant_ac1_2_bts_distance']],
-                                    theta=[0, df.loc[i, "fwd_ant_ac1_2_bts_angle"]],
+                                    r=[0, df.loc[i, 'acft_distance_ac1_bts']],
+                                    theta=[0, df.loc[i, "fwd_ac1_angle_2_bts"]],
                                     mode=trace_mode,
                                     line=dict(width=2, color=line_color[0]),
                                     marker=trace_marker,
@@ -899,11 +920,11 @@ def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot,
                         if x == 0 and y == 1:
                             if rx_plot is True and fwd_ac2_rx < aft_ac2_rx:
                                 break
-                            elif (df.loc[i, 'fwd_ant_ac2_2_bts_distance'] is not None and
-                                  df.loc[i, "fwd_ant_ac2_2_bts_angle"] is not None):
+                            elif (df.loc[i, 'acft_distance_ac2_bts'] is not None and
+                                  df.loc[i, "fwd_ac2_angle_2_bts"] is not None):
                                 fig.add_trace((go.Scatterpolar(
-                                    r=[0, df.loc[i, 'fwd_ant_ac2_2_bts_distance']],
-                                    theta=[0, df.loc[i, "fwd_ant_ac2_2_bts_angle"]],
+                                    r=[0, df.loc[i, 'acft_distance_ac2_bts']],
+                                    theta=[0, df.loc[i, "fwd_ac2_angle_2_bts"]],
                                     mode=trace_mode,
                                     line=dict(width=2, color=line_color[1]),
                                     marker=trace_marker,
@@ -923,11 +944,11 @@ def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot,
                         if x == 1 and y == 0:
                             if rx_plot is True and aft_ac1_rx < fwd_ac1_rx:
                                 break
-                            elif (df.loc[i, 'aft_ant_ac1_2_bts_distance'] is not None and
-                                  df.loc[i, "aft_ant_ac1_2_bts_angle"] is not None):
+                            elif (df.loc[i, 'acft_distance_ac1_bts'] is not None and
+                                  df.loc[i, "aft_ac1_angle_2_bts"] is not None):
                                 fig.add_trace((go.Scatterpolar(
-                                    r=[0, df.loc[i, 'aft_ant_ac1_2_bts_distance']],
-                                    theta=[0, df.loc[i, "aft_ant_ac1_2_bts_angle"]],
+                                    r=[0, df.loc[i, 'acft_distance_ac1_bts']],
+                                    theta=[0, df.loc[i, "aft_ac1_angle_2_bts"]],
                                     mode=trace_mode,
                                     line=dict(width=2, color=line_color[2]),
                                     marker=trace_marker,
@@ -947,11 +968,11 @@ def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot,
                         if x == 1 and y == 1:
                             if rx_plot is True and aft_ac2_rx < fwd_ac2_rx:
                                 break
-                            elif (df.loc[i, 'aft_ant_ac2_2_bts_distance'] is not None and
-                                  df.loc[i, "aft_ant_ac2_2_bts_angle"] is not None):
+                            elif (df.loc[i, 'acft_distance_ac2_bts'] is not None and
+                                  df.loc[i, "aft_ac2_angle_2_bts"] is not None):
                                 fig.add_trace((go.Scatterpolar(
-                                    r=[0, df.loc[i, 'aft_ant_ac2_2_bts_distance']],
-                                    theta=[0, df.loc[i, "aft_ant_ac2_2_bts_angle"]],
+                                    r=[0, df.loc[i, 'acft_distance_ac2_bts']],
+                                    theta=[0, df.loc[i, "aft_ac2_angle_2_bts"]],
                                     mode=trace_mode,
                                     line=dict(width=2, color=line_color[3]),
                                     marker=trace_marker,
@@ -980,8 +1001,9 @@ def plotter(minute_plot, time_start, time_end, plot_choice, plot_color, rx_plot,
                 showlegend=False,
                 height=800,
                 width=800,
-                #autosize=True,
+                autosize=False,
             )
+            fig.update_yaxes(automargin=True)
             del df_cellsites
             del df
             return fig
@@ -999,8 +1021,8 @@ def time_slider_config(minute_plot):  # range slider, value integers as list sho
         # if minute_plot == "5 minute":
         #     df = df.iloc[::5, :]
 
-        time_start = df['time'].iloc[0] #time start
-        time_end = df['time'].iloc[-1] #time end
+        time_start = df['time'].iloc[0]  #time start
+        time_end = df['time'].iloc[-1]  #time end
         df.index = pd.RangeIndex(len(df.index))
         df.index = range(len(df.index))
         df_length = len(df)
@@ -1041,13 +1063,13 @@ def time_slider_config(minute_plot):  # range slider, value integers as list sho
 
 
 #formats the legend
-def legend_plotter(plot_choice, plot_color):
+def legend_plotter(plot_choice, trace):
     legend = []
     html_style = []
     match plot_choice:
-        case 'Flight':
-            match plot_color:
-                case 'None':
+        case 'Map':
+            match trace:
+                case 'Flight':
                     legend.append('Reported Data')
                     legend.append('Missing Data')
                     legend.append('')
@@ -1108,8 +1130,8 @@ def legend_plotter(plot_choice, plot_color):
                     html_style.append({'color': 'black'})
                     return legend, html_style
         case 'Antenna':
-            match plot_color:
-                case 'None':
+            match trace:
+                case 'Flight':
                     legend.append('Reported Data')
                     legend.append('')
                     legend.append('')
@@ -1170,8 +1192,8 @@ def legend_plotter(plot_choice, plot_color):
                     html_style.append({'color': 'black'})
                     return legend, html_style
         case 'empty':
-            match plot_color:
-                case 'None':
+            match trace:
+                case 'Flight':
                     legend.append('')
                     legend.append('')
                     legend.append('')
@@ -1226,8 +1248,8 @@ def xpol_fill(minute_plot, time_start, time_end):
         # find number of times drc is above 0 gives service minutes aircard was usable
         start_time = df.loc[0, 'time']
         end_time = df.loc[last_row_index, 'time']
-        start_time_index = df_static.index[(df_static['time']-start_time).abs().argsort()[:1]].tolist()
-        end_time_index = df_static.index[(df_static['time']-end_time).abs().argsort()[:1]].tolist()
+        start_time_index = df_static.index[(df_static['time'] - start_time).abs().argsort()[:1]].tolist()
+        end_time_index = df_static.index[(df_static['time'] - end_time).abs().argsort()[:1]].tolist()
 
         for i in range(start_time_index[0], end_time_index[0]):
             if df_static.loc[i, "drc_kbps"] > 0:
@@ -1305,8 +1327,8 @@ def xpol_fill(minute_plot, time_start, time_end):
     except:
         xpol_data = []
         for i in range(9):
-          xpol_data.append("")
-          return xpol_data
+            xpol_data.append("")
+            return xpol_data
 
 
 server = Flask(__name__)
@@ -1315,15 +1337,14 @@ app = dash.Dash(name='app1', server=server, external_stylesheets=[dbc.themes.SOL
 
 # html and DBC page design items defined
 file_search = dcc.Markdown(children="Working File", className='lbl_working')
-verified_file = dcc.Markdown(id='verified_file', children="", className='verified_flag')
 working_file = dcc.Upload(id='upload_data', children="Browse or Drag-n-Drop File", className='upload_input',
                           disabled=False, multiple=True)
 btn_reset = dbc.Button("Reset", id='btn_reset', disabled=True)
 time_slider = dcc.RangeSlider(id='time_slider', step=1, min=0,
                               max=0, value=[0, 0], allowCross=False,
                               pushable=1, className='slider_time')
-rad_plot_type = dbc.RadioItems(['Flight', 'Antenna'], 'Flight', id='plot_type', inline=True)
-rad_color = dbc.RadioItems(['DRC', 'SINR', 'RX', 'TX', 'None'], 'None', id='trace', inline=True)
+rad_plot_type = dbc.RadioItems(['Map', 'Antenna'], 'Map', id='plot_type', inline=True)
+rad_color = dbc.RadioItems(['DRC', 'SINR', 'RX', 'TX', 'Flight'], 'Flight', id='trace', inline=True)
 rad_minute_plot = dbc.RadioItems(['1 minute', '5 minute'], '1 minute', id='minute_plot', inline=True)
 check_rx_high = dbc.Checkbox("chk_rx_primary", label="RX Primary (antenna only)", value=False, disabled=True)
 check_bts_plot = dbc.Checkbox("chk_bts_plot", label="BTS", value=True, disabled=False)
@@ -1350,14 +1371,11 @@ fig_plot.update_layout(
     autosize=True,
     margin=dict(l=1, r=1, t=1, b=1)
 )
-graph = dcc.Graph(figure=fig_plot, id='fig_plot')
 
 app.layout = dbc.Container([
-
     dbc.Row([
         dbc.Col([file_search], width=2),
         dbc.Col([working_file], width=6),
-        dbc.Col([verified_file], width=2),
         dbc.Col([btn_reset], width=1)
     ], className='row1'),  # end row 1
 
@@ -1381,9 +1399,10 @@ app.layout = dbc.Container([
     ], className='row4'),
 
     dbc.Row([
-        dbc.Col([graph], width=9, className='graph'),
+        # dbc.Col([graph], width=9, className='graph'),
+        dbc.Col(dls.Fade(dcc.Graph(figure=fig_plot, id='fig_plot'),
+                            color="#435278"), width=9, className='graph'),
         dbc.Col([
-
             dbc.Table([
                 html.Tr([html.Th(""), html.Th("Service Minutes"), html.Th("Avg DRC")]),
                 html.Tr([html.Td("Hpol"), html.Td("", id="hpol_srv_min"), html.Td("", id="hpol_avg_drc")]),
@@ -1418,11 +1437,11 @@ app.layout = dbc.Container([
 
 ])
 
+
 # callback when file uploaded
 @app.callback(
     Output('upload_data', 'children'),
     Output('upload_data', 'disabled'),
-    Output('verified_file', 'children', allow_duplicate=True),
     Output('btn_reset', 'disabled', allow_duplicate=True),
     Output('fig_plot', 'figure', allow_duplicate=True),
     Output('time_slider', 'marks', allow_duplicate=True),
@@ -1456,10 +1475,9 @@ app.layout = dbc.Container([
     Input('chk_rx_primary', 'value'),
     Input("chk_bts_plot", 'value'),
     Input("minute_plot", 'value'),
-    prevent_initial_call=True,
-    running=[(Output('verified_file', 'children'), 'Please wait', '')]
-)
-def data_file_loaded(list_of_contents, list_of_names, plot, plot_color, rx_primary, bts_plot, minute_plot):
+    prevent_initial_call=True
+ )
+def data_file_loaded(list_of_contents, list_of_names, plot, trace, rx_primary, bts_plot, minute_plot):
     global df_static
     global xpol_report
     global range_of_slider
@@ -1472,22 +1490,22 @@ def data_file_loaded(list_of_contents, list_of_names, plot, plot_color, rx_prima
         build_dataframe = parse_contents(contents, filename)
         if build_dataframe is True and len(df_static) > 0:
             #return of time_bar [time_start, time_end, marker, minimum, maximum, value]
+
             time_bar = time_slider_config(minute_plot)
             time_start = 0
             time_end = len(df_static) - 1
             xpol_report.clear()
             xpol_report = xpol_fill(minute_plot, time_start, time_end)
-
-            plot_load = plotter(minute_plot, time_start, time_end, plot, plot_color, rx_primary, bts_plot)
+            plot_load = plotter(minute_plot, time_start, time_end, plot, trace, rx_primary, bts_plot)
             range_of_slider = time_bar[5]
-            legend_html, html_style = legend_plotter(plot, plot_color)
+            legend_html, html_style = legend_plotter(plot, trace)
             lru = find_lru_sn()
-            return (list_of_names, True, 'Verified', False, plot_load, time_bar[2], time_bar[3],
+            return (list_of_names, True, False, plot_load, time_bar[2], time_bar[3],
                     time_bar[4], time_bar[5], legend_html[0], html_style[0], legend_html[1], html_style[1],
                     legend_html[2], html_style[2], legend_html[3], html_style[3], legend_html[4], html_style[4], lru,
                     xpol_report[0], xpol_report[1], xpol_report[2], xpol_report[3], xpol_report[4], xpol_report[5],
                     xpol_report[6], xpol_report[7], xpol_report[8])
-        elif plot == 'Flight':  # file entered was not verified and map is being shown
+        elif plot == 'Map':  # file entered was not verified and map is being shown
             plot_load = go.Figure(data=go.Scattergeo())
             plot_load.update_layout(
                 geo=dict(
@@ -1508,7 +1526,7 @@ def data_file_loaded(list_of_contents, list_of_names, plot, plot_color, rx_prima
                         "font": {"size": 28}
                     }
                 ])
-            range_of_slider = [0,0]
+            range_of_slider = [0, 0]
             marker = None
             legend_html.clear()
             html_style.clear()
@@ -1518,13 +1536,13 @@ def data_file_loaded(list_of_contents, list_of_names, plot, plot_color, rx_prima
             xpol_report.clear()
             for i in range(9):
                 xpol_report.append("")
-            return ("File wrong type or format", False, "", True, fig_plot, marker, 0, 0, range_of_slider,
+            return ("File wrong type or format", False, True, fig_plot, marker, 0, 0, range_of_slider,
                     legend_html[0], html_style[0], legend_html[1], html_style[1],
                     legend_html[2], html_style[2], legend_html[3], html_style[3], legend_html[4], html_style[4], "",
                     xpol_report[0], xpol_report[1], xpol_report[2], xpol_report[3], xpol_report[4], xpol_report[5],
                     xpol_report[6], xpol_report[7], xpol_report[8])
         else:  # Airborne map being shown and file was not verified
-            range_of_slider = [0,0]
+            range_of_slider = [0, 0]
             marker = None
             plot_load = make_subplots(rows=2, cols=2, specs=[[{'type': 'polar'}] * 2] * 2,
                                       subplot_titles=('FWD Aircard 1',
@@ -1556,7 +1574,7 @@ def data_file_loaded(list_of_contents, list_of_names, plot, plot_color, rx_prima
             xpol_report.clear()
             for i in range(9):
                 xpol_report.append("")
-            return ("File wrong type or format", False, "", True, plot_load, marker, 0, 0, range_of_slider,
+            return ("File wrong type or format", False, True, plot_load, marker, 0, 0, range_of_slider,
                     legend_html[0], html_style[0], legend_html[1], html_style[1],
                     legend_html[2], html_style[2], legend_html[3], html_style[3], legend_html[4], html_style[4], "",
                     xpol_report[0], xpol_report[1], xpol_report[2], xpol_report[3], xpol_report[4], xpol_report[5],
@@ -1564,7 +1582,8 @@ def data_file_loaded(list_of_contents, list_of_names, plot, plot_color, rx_prima
     else:
         raise PreventUpdate
 
-# user changes plot type Flight or antenna plot or BTS Plot checkbox or rx_primary or trace
+
+# user changes plot type map or antenna plot or BTS Plot checkbox or rx_primary or trace
 @app.callback(
     Output('fig_plot', 'figure', allow_duplicate=True),
     Output('chk_rx_primary', 'disabled'),
@@ -1585,7 +1604,6 @@ def data_file_loaded(list_of_contents, list_of_names, plot, plot_color, rx_prima
     Input("chk_bts_plot", 'value'),
     Input("minute_plot", 'value'),
     prevent_initial_call=True,
-    running=[(Output('verified_file', 'children'), 'Please wait', '')]
 )
 def plot_update(plot, trace, rx_primary, bts_plot, minute_plot):
     global df_static
@@ -1641,6 +1659,7 @@ def plot_update(plot, trace, rx_primary, bts_plot, minute_plot):
     else:
         raise PreventUpdate
 
+
 #time of view has changed
 @app.callback(
     Output('fig_plot', 'figure', allow_duplicate=True),
@@ -1660,7 +1679,6 @@ def plot_update(plot, trace, rx_primary, bts_plot, minute_plot):
     Input("chk_bts_plot", 'value'),
     Input("minute_plot", 'value'),
     prevent_initial_call=True,
-    running=[(Output('verified_file', 'children'), 'Please wait', '')]
 )
 def time_update(slider_range, plot, trace, rx_primary, bts_plot, minute_plot):
     global range_of_slider
@@ -1682,12 +1700,13 @@ def time_update(slider_range, plot, trace, rx_primary, bts_plot, minute_plot):
                 xpol_report[5], xpol_report[6], xpol_report[7], xpol_report[8])
     else:
         raise PreventUpdate
+
+
 #reset all back to original
 @app.callback(  # reset all callback
     Output('fig_plot', 'figure', allow_duplicate=True),
     Output('upload_data', 'children', allow_duplicate=True),
     Output('upload_data', 'disabled', allow_duplicate=True),
-    Output('verified_file', 'children', allow_duplicate=True),
     Output('btn_reset', 'disabled', allow_duplicate=True),
     Output('chk_rx_primary', 'value', allow_duplicate=True),
     Output('plot_type', 'value', allow_duplicate=True),
@@ -1720,7 +1739,6 @@ def time_update(slider_range, plot, trace, rx_primary, bts_plot, minute_plot):
     Output('legend_col5', 'style', allow_duplicate=True),
     Input('btn_reset', 'n_clicks'),
     prevent_initial_call=True,
-    running=[(Output('verified_file', 'children'), 'Please wait', '')]
 )
 def reset_page(reset_pressed):
     global df_static
@@ -1735,7 +1753,6 @@ def reset_page(reset_pressed):
     time_start = 0
     time_end = 0
     xpol_report.clear()
-    xpol_report = xpol_fill("1 minute", time_start, time_end)
     time_bar = time_slider_config('1 minute')
     range_of_slider = [0, 0]
     reset_plot = go.Figure(data=go.Scattergeo())
@@ -1749,14 +1766,17 @@ def reset_page(reset_pressed):
             showsubunits=True, subunitcolor="#002b36",
             bgcolor='#002b36'),
         autosize=True,
-        margin=dict(l=1, r=1, t=1, b=1)
+        margin=dict(l=0, r=0, t=0, b=0)
     )
 
     legend_html.clear()
     html_style.clear()
-    legend_html, html_style = legend_plotter('empty', 'None')
+    legend_html, html_style = legend_plotter('empty', 'Flight')
+    for i in range(9):
+        xpol_report.append("")
 
-    return (reset_plot, "Browse or Drag-n-Drop File", False, "", True, False, 'Flight', None, time_bar[2], time_bar[3],
+
+    return (reset_plot, "Browse or Drag-n-Drop File", False, True, False, 'Map', None, time_bar[2], time_bar[3],
             time_bar[4], time_bar[5], "", xpol_report[0], xpol_report[1], xpol_report[2], xpol_report[3],
             xpol_report[4], xpol_report[5], xpol_report[6], xpol_report[7], xpol_report[8], True, '1 minute',
             legend_html[0], html_style[0], legend_html[1], html_style[1], legend_html[2], html_style[2], legend_html[3],
@@ -1771,5 +1791,3 @@ if __name__ == '__main__':
     html_style = []
     xpol_report = []
     app.run_server(debug=True)  #run local server
-
-
