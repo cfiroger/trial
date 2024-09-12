@@ -13,9 +13,7 @@ import math
 from dash.exceptions import PreventUpdate
 from math import cos, sin, atan2, sqrt, degrees, radians, asin
 from plotly.subplots import make_subplots
-
 import gc
-
 global df_static
 global xpol_report
 global range_of_slider
@@ -273,6 +271,9 @@ def parse_contents(contents, filename):
                                                                                           row['bts1_longitude'],
                                                                                           "d")[0], axis=1)
 
+        df_static.loc[df_static["acft_distance_ac1_bts"] > 150, "acft_distance_ac1_bts"] = None
+
+
         df_static["acft_bearing_ac1_bts"] = df_static.apply(lambda row: distance_bearing(row['lat'],
                                                                                          row['bts1_latitude'],
                                                                                          row['lon'],
@@ -284,6 +285,8 @@ def parse_contents(contents, filename):
                                                                                           row['lon'],
                                                                                           row['bts2_longitude'],
                                                                                           "d")[0], axis=1)
+
+        df_static.loc[df_static["acft_distance_ac2_bts"] > 150, "acft_distance_ac2_bts"] = None
 
         df_static["acft_bearing_ac2_bts"] = df_static.apply(lambda row: distance_bearing(row['lat'],
                                                                                          row['bts2_latitude'],
@@ -307,7 +310,7 @@ def parse_contents(contents, filename):
         df_static["aft_ac2_angle_2_bts"] = df_static.apply(lambda row: angle_2_bts(row['heading'],
                                                                                    row['acft_bearing_ac2_bts'],
                                                                                    "aft"), axis=1)
-
+        df_static.to_csv("file.csv")
         return True
     except:
         print('nope')
@@ -805,7 +808,7 @@ def plotter(minute_plot, time_start, time_end, plot_choice, trace, rx_plot, bts_
                 fig.add_scattergeo(
                     lon=df_btslist['longitude'],
                     lat=df_btslist['latitude'],
-                    marker=dict(size=35, symbol='circle', color='green', opacity=0.75, line=dict(width=0)),
+                    marker=dict(size=35, symbol='circle', color='#2aa198', opacity=0.75, line=dict(width=0)),
                     name="",
                     showlegend=False,
                     customdata=np.stack((df_btslist['Site_Name'], df_btslist['Site_ID']), axis=-1),
@@ -821,7 +824,7 @@ def plotter(minute_plot, time_start, time_end, plot_choice, trace, rx_plot, bts_
                             lon=[df.loc[i, 'lon'], df.loc[i, 'bts1_longitude']],
                             lat=[df.loc[i, 'lat'], df.loc[i, 'bts1_latitude']],
                             mode='lines',
-                            line=dict(width=1, color='green'),
+                            line=dict(width=1, color='#2aa198'),
                             opacity=1,
                             name='',
                             showlegend=False,
@@ -833,7 +836,7 @@ def plotter(minute_plot, time_start, time_end, plot_choice, trace, rx_plot, bts_
                                 lon=[df.loc[i, 'lon'], df.loc[i, 'bts1_longitude']],
                                 lat=[df.loc[i, 'lat'], df.loc[i, 'bts1_latitude']],
                                 mode='lines',
-                                line=dict(width=1, color='blue'),
+                                line=dict(width=1, color='#268bd2'),
                                 opacity=1,
                                 name='',
                                 showlegend=False,
@@ -844,7 +847,7 @@ def plotter(minute_plot, time_start, time_end, plot_choice, trace, rx_plot, bts_
                                 lon=[df.loc[i, 'lon'], df.loc[i, 'bts2_longitude']],
                                 lat=[df.loc[i, 'lat'], df.loc[i, 'bts2_latitude']],
                                 mode='lines',
-                                line=dict(width=1, color='yellow'),
+                                line=dict(width=1, color='#b58900'),
                                 opacity=1,
                                 name='',
                                 showlegend=False,
@@ -855,8 +858,8 @@ def plotter(minute_plot, time_start, time_end, plot_choice, trace, rx_plot, bts_
                     resolution=50,
                     scope='north america',
                     showcountries=True,
-                    showsubunits=True, subunitcolor="#002b36",
-                    bgcolor='#002b36'),
+                    showsubunits=True, subunitcolor="#839496",
+                    bgcolor='#839496'),
                 hoverlabel=dict(
                     bgcolor='#63666A',
                     font_size=16,
@@ -864,7 +867,8 @@ def plotter(minute_plot, time_start, time_end, plot_choice, trace, rx_plot, bts_
                 ),
                 autosize=True,
                 margin=dict(l=0, r=0, t=0, b=0),
-                legend=dict(yanchor="middle", y=.5)
+                legend=dict(yanchor="middle", y=.5),
+                paper_bgcolor='#002b36'
             )
 
             fig.update_geos(fitbounds="locations")
@@ -1001,8 +1005,7 @@ def plotter(minute_plot, time_start, time_end, plot_choice, trace, rx_plot, bts_
                 showlegend=False,
                 height=800,
                 width=800,
-                autosize=False,
-            )
+                autosize=False)
             fig.update_yaxes(automargin=True)
             del df_cellsites
             del df
@@ -1369,7 +1372,8 @@ fig_plot.update_layout(
         showsubunits=True, subunitcolor="#002b36",
         bgcolor='#002b36'),
     autosize=True,
-    margin=dict(l=1, r=1, t=1, b=1)
+    margin=dict(l=0, r=0, t=0, b=0),
+    paper_bgcolor='#002b36'
 )
 
 app.layout = dbc.Container([
@@ -1400,8 +1404,8 @@ app.layout = dbc.Container([
 
     dbc.Row([
         # dbc.Col([graph], width=9, className='graph'),
-        dbc.Col(dls.Fade(dcc.Graph(figure=fig_plot, id='fig_plot'),
-                            color="#435278"), width=9, className='graph'),
+        dbc.Col(dls.Fade(dcc.Graph(figure=fig_plot, id='fig_plot'), color="#435278"),
+                width=9, className='graph'),
         dbc.Col([
             dbc.Table([
                 html.Tr([html.Th(""), html.Th("Service Minutes"), html.Th("Avg DRC")]),
