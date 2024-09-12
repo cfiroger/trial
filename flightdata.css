@@ -16,7 +16,7 @@
 
 }
 .legend_row{
-    margin-top: 25px;
+    margin-top: 20px;
     background: #839496;
     height: 40px;
     line-height: 40px;
@@ -29,44 +29,51 @@
     color: #002b36;
     font-family: Helvetica, sans-serif;
     font-weight: normal;
-    font-size: calc(.5rem + .5vw);
-    overflow: hidden;
+    font-size: 1rem;
+    overflow-wrap: hidden;
 }
 
 .legend_col1{
     font-family: Helvetica, sans-serif;
     font-weight: normal;
-     font-size: calc(.5rem + .5vw);
+     font-size: 1rem;
      overflow: hidden;
 }
 
 .legend_col2{
     font-family: Helvetica, sans-serif;
     font-weight: normal;
-    font-size: calc(.5rem + .5vw);
+    font-size: 1rem;
     overflow: hidden;
 }
 
 .legend_col3{
     font-family: Helvetica, sans-serif;
     font-weight: normal;
-    font-size: calc(.5rem + .5vw);
+    font-size: 1rem;
 }
 
 .legend_col4{
     font-family: Helvetica, sans-serif;
     font-weight: normal;
-    font-size: calc(.5rem + .5vw);
+    font-size: 1rem;
 }
 
 .legend_col5{
     font-family: Helvetica, sans-serif;
     font-weight: normal;
-    font-size: calc(.5rem + .5vw);
+    font-size: 1rem;
 }
 
 .graph{
     border-color: #002b36;
+}
+.graph_row{
+    border-color: #002b36;
+}
+.fig_plot{
+    border-color: #002b36;
+    background-color: #00b36;
 }
 
 .lbl_working{
