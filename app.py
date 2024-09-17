@@ -14,6 +14,7 @@ from dash.exceptions import PreventUpdate
 from math import cos, sin, atan2, sqrt, degrees, radians, asin
 from plotly.subplots import make_subplots
 import gc
+
 global df_static
 global xpol_report
 global range_of_slider
@@ -310,6 +311,9 @@ def parse_contents(contents, filename):
         df_static["aft_ac2_angle_2_bts"] = df_static.apply(lambda row: angle_2_bts(row['heading'],
                                                                                    row['acft_bearing_ac2_bts'],
                                                                                    "aft"), axis=1)
+
+
+        print(avg_rx("1 minute", 0, 12))
         df_static.to_csv("file.csv")
         return True
     except:
@@ -1334,6 +1338,38 @@ def xpol_fill(minute_plot, time_start, time_end):
             return xpol_data
 
 
+def avg_rx(minute_plot, time_start, time_end):
+    global df_static
+    try:
+        df = df_static.copy(deep=True)
+        df = df.iloc[time_start:time_end]
+        df = df.reset_index()
+
+
+        fwd_hpol_rx_total = 0
+        fwd_vpol_rx_total = 0
+        aft_hpol_rx_total = 0
+        aft_vpol_rx_total = 0
+        hpol_total_ = 0
+        vpol_total = 0
+
+        if minute_plot == "5 minute":
+            df = df.iloc[::5, :]
+            df = df.reset_index()
+        print(len(df))
+        print(df['rx_agc0'].head(12))
+        fwd_vpol_rx_total = df['rx_agc0'].sum()
+        print(df['rx_agc0'].sum())
+        return 0
+
+    except:
+        return 1
+
+
+
+
+
+
 server = Flask(__name__)
 
 app = dash.Dash(name='app1', server=server, external_stylesheets=[dbc.themes.SOLAR])
@@ -1414,12 +1450,21 @@ app.layout = dbc.Container([
             ], bordered=True, className='tbl_service'),
 
             dbc.Table([
-                html.Tr([html.Th("Antenna"), html.Th("Port"), html.Th("Xpol")]),
+                html.Tr([html.Th("Antenna"), html.Th("Port"), html.Th("Usage")]),
                 html.Tr([html.Td("FWD", rowSpan=2), html.Td("Hpol"), html.Td("", id="fwd_hpol")]),
                 html.Tr([html.Td("Vpol"), html.Td("", id="fwd_vpol")]),
                 html.Tr([html.Td("AFT", rowSpan=2), html.Td("Hpol"), html.Td("", id="aft_hpol")]),
                 html.Tr([html.Td("Vpol"), html.Td("", id="aft_vpol")]),
             ], bordered=True, className='tbl_xpol'),
+
+            dbc.Table([
+                html.Tr([html.Th("Antenna"), html.Th("Port"), html.Th("Avg RX ")]),
+                html.Tr([html.Td("FWD", rowSpan=2), html.Td("Hpol"), html.Td("", id="fwd_hpol_rx")]),
+                html.Tr([html.Td("Vpol"), html.Td("", id="fwd_vpol_rx")]),
+                html.Tr([html.Td("AFT", rowSpan=2), html.Td("Hpol"), html.Td("", id="aft_hpol_rx")]),
+                html.Tr([html.Td("Vpol"), html.Td("", id="aft_vpol_rx")]),
+            ], bordered=True, className='tbl_xpol'),
+
             dbc.Table([
                 html.Tr([html.Td("Flight Minutes:"), html.Td("", id="flight_min")])
             ], bordered=True, className='flight_minutes')
